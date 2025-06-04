@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Calendar, Users, Sword, Settings, LogOut } from "lucide-react"
+import { Calendar, Users, Settings, LogOut, Shield, Crown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -21,18 +21,22 @@ function AppContent() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center">
-        <Card className="w-full max-w-md bg-slate-800/50 border-slate-700">
+      <div className="min-h-screen wotlk-frost-bg flex items-center justify-center">
+        <Card className="w-full max-w-md wotlk-card">
           <CardHeader className="text-center">
-            <div className="mx-auto w-16 h-16 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-full flex items-center justify-center mb-4">
-              <Sword className="w-8 h-8 text-slate-900" />
+            <div className="mx-auto w-16 h-16 guild-emblem rounded-full flex items-center justify-center mb-4">
+              <Crown className="w-8 h-8 text-slate-900" />
             </div>
-            <CardTitle className="text-2xl font-bold text-slate-100">RaidPlanner</CardTitle>
-            <p className="text-slate-400">Guild raid management made simple</p>
+            <CardTitle className="text-2xl font-bold text-foreground">
+              Northrend RaidPlanner
+            </CardTitle>
+            <p className="text-muted-foreground">
+              Professional guild raid management for WOTLK
+            </p>
           </CardHeader>
           <CardContent>
             <Button
-              className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white"
+              className="w-full"
               onClick={() => {
                 // Mock Discord login
                 window.location.href = "/auth/discord"
@@ -90,38 +94,39 @@ function AppContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
+    <div className="min-h-screen wotlk-frost-bg">
       {/* Header */}
-      <header className="bg-slate-800/50 border-b border-slate-700 backdrop-blur-sm">
+      <header className="wotlk-card border-x-0 border-t-0 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
-              <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-full flex items-center justify-center">
-                <Sword className="w-5 h-5 text-slate-900" />
+              <div className="w-8 h-8 guild-emblem rounded-full flex items-center justify-center">
+                <Crown className="w-4 h-4 text-slate-900" />
               </div>
-              <h1 className="text-xl font-bold text-slate-100">RaidPlanner</h1>
+              <h1 className="text-xl font-semibold text-foreground">Northrend RaidPlanner</h1>
             </div>
 
             <nav className="hidden md:flex space-x-1">
               <Button
                 variant={currentView === "dashboard" ? "secondary" : "ghost"}
                 onClick={() => setCurrentView("dashboard")}
-                className="text-slate-300 hover:text-slate-100"
+                className="text-muted-foreground hover:text-foreground"
               >
+                <Shield className="w-4 h-4 mr-2" />
                 Dashboard
               </Button>
               <Button
                 variant={currentView === "calendar" ? "secondary" : "ghost"}
                 onClick={() => setCurrentView("calendar")}
-                className="text-slate-300 hover:text-slate-100"
+                className="text-muted-foreground hover:text-foreground"
               >
                 <Calendar className="w-4 h-4 mr-2" />
-                Calendar
+                Raids
               </Button>
               <Button
                 variant={currentView === "characters" ? "secondary" : "ghost"}
                 onClick={() => setCurrentView("characters")}
-                className="text-slate-300 hover:text-slate-100"
+                className="text-muted-foreground hover:text-foreground"
               >
                 <Users className="w-4 h-4 mr-2" />
                 Characters
@@ -130,7 +135,7 @@ function AppContent() {
                 <Button
                   variant={currentView === "admin" ? "secondary" : "ghost"}
                   onClick={() => setCurrentView("admin")}
-                  className="text-slate-300 hover:text-slate-100"
+                  className="text-muted-foreground hover:text-foreground"
                 >
                   <Settings className="w-4 h-4 mr-2" />
                   Admin
@@ -141,13 +146,13 @@ function AppContent() {
             <div className="flex items-center space-x-3">
               <Avatar className="w-8 h-8">
                 <AvatarImage src={user.avatarUrl || "/placeholder.svg"} />
-                <AvatarFallback className="bg-slate-700 text-slate-300">{user.name.charAt(0)}</AvatarFallback>
+                <AvatarFallback className="bg-muted text-muted-foreground">{user.name.charAt(0)}</AvatarFallback>
               </Avatar>
-              <span className="text-slate-300 hidden sm:block">{user.name}</span>
-              <Badge variant="outline" className="border-yellow-500 text-yellow-400 hidden sm:block">
+              <span className="text-foreground hidden sm:block font-medium">{user.name}</span>
+              <Badge className="wotlk-badge hidden sm:block">
                 {user.role.toUpperCase()}
               </Badge>
-              <Button variant="ghost" size="sm" onClick={logout} className="text-slate-400 hover:text-slate-100">
+              <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground hover:text-foreground">
                 <LogOut className="w-4 h-4" />
               </Button>
             </div>
@@ -159,6 +164,20 @@ function AppContent() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{renderContent()}</main>
     </div>
   )
+}
+
+// Helper function for role display names
+function getRoleDisplayName(role: string): string {
+  switch (role) {
+    case "admin":
+      return "Guild Master"
+    case "rl":
+      return "Raid Leader"
+    case "member":
+      return "Guild Member"
+    default:
+      return "Recruit"
+  }
 }
 
 export default function App() {

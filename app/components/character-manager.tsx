@@ -279,7 +279,14 @@ export function CharacterManager() {
                     </div>
                     <div className="flex items-center gap-1">
                       {getRoleIcon(role)}
-                      <Badge variant="outline" className="text-xs">
+                      <Badge 
+                        variant="outline" 
+                        className={`text-xs px-2 py-0 ${
+                          character.faction === 'Alliance' 
+                            ? 'border-blue-500/30 text-blue-600 bg-blue-500/10' 
+                            : 'border-red-500/30 text-red-600 bg-red-500/10'
+                        }`}
+                      >
                         {character.faction}
                       </Badge>
                     </div>

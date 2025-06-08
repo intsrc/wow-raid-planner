@@ -1,7 +1,6 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-import { useSearchParams } from "next/navigation"
 import { apiClient } from "@/lib/api-client"
 import { User } from "@/lib/types"
 
@@ -24,7 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Check if user is already authenticated
     const initAuth = async () => {
-      // Check URL params for auth status
+      // Check URL params for auth status using window.location directly
       const urlParams = new URLSearchParams(window.location.search)
       const authStatus = urlParams.get('auth')
       const authMessage = urlParams.get('message')

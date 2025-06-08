@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Calendar, Users, Settings, LogOut, Shield, Crown } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -16,24 +16,32 @@ import { CharacterManager } from "./components/character-manager"
 import { RosterBuilder } from "./components/roster-builder"
 import { AdminPanel } from "./components/admin-panel"
 
+function SearchParamsHandler({ onParamsChange }: { onParamsChange: (view: string, raidId?: string) => void }) {
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    const view = searchParams.get('view') || 'dashboard'
+    const raidId = searchParams.get('raidId') || undefined
+    onParamsChange(view, raidId)
+  }, [searchParams, onParamsChange])
+
+  return null
+}
+
 function AppContent() {
   const { user, login, loginWithDiscord, logout, loading, error } = useAuth()
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [currentView, setCurrentView] = useState("dashboard")
   const [selectedRaidId, setSelectedRaidId] = useState<string | null>(null)
   const [loggingIn, setLoggingIn] = useState(false)
 
-  // Initialize view from URL params
-  useEffect(() => {
-    const view = searchParams.get('view') || 'dashboard'
-    const raidId = searchParams.get('raidId')
-    
+  // Handle URL parameter changes
+  const handleParamsChange = (view: string, raidId?: string) => {
     setCurrentView(view)
     if (raidId) {
       setSelectedRaidId(raidId)
     }
-  }, [searchParams])
+  }
 
   // Update URL when view changes
   const updateView = (view: string, raidId?: string | null) => {
@@ -152,6 +160,10 @@ function AppContent() {
 
   return (
     <div className="min-h-screen wotlk-frost-bg">
+      <Suspense fallback={null}>
+        <SearchParamsHandler onParamsChange={handleParamsChange} />
+      </Suspense>
+      
       {/* Header */}
       <header className="wotlk-card border-x-0 border-t-0 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -200,20 +212,25 @@ function AppContent() {
               )}
             </nav>
 
-            <div className="flex items-center space-x-3">
-              <Avatar className="w-8 h-8">
-                <AvatarImage src={user.avatarUrl || "/placeholder.svg"} />
-                <AvatarFallback className="bg-muted text-muted-foreground">
-                  {user.username ? user.username.charAt(0).toUpperCase() : "U"}
-                </AvatarFallback>
-              </Avatar>
-              <span className="text-foreground hidden sm:block font-medium">
-                {user.username || "Unknown User"}
-              </span>
-              <Badge className="wotlk-badge hidden sm:block">
-                {user.role ? user.role.toUpperCase() : "MEMBER"}
-              </Badge>
-              <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground hover:text-foreground">
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <Avatar className="w-8 h-8">
+                  <AvatarImage src={user.avatarUrl || undefined} />
+                  <AvatarFallback>{user.username.charAt(0).toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div className="hidden sm:block">
+                  <p className="text-sm font-medium text-foreground">{user.username}</p>
+                  <Badge variant="secondary" className="text-xs">
+                    {getRoleDisplayName(user.role)}
+                  </Badge>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={logout}
+                className="text-muted-foreground hover:text-foreground"
+              >
                 <LogOut className="w-4 h-4" />
               </Button>
             </div>
@@ -222,22 +239,23 @@ function AppContent() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{renderContent()}</main>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {renderContent()}
+      </main>
     </div>
   )
 }
 
-// Helper function for role display names
 function getRoleDisplayName(role: string): string {
   switch (role) {
-    case "admin":
-      return "Guild Master"
-    case "rl":
+    case "ADMIN":
+      return "Admin"
+    case "RAID_LEADER":
       return "Raid Leader"
-    case "member":
-      return "Guild Member"
+    case "MEMBER":
+      return "Member"
     default:
-      return "Recruit"
+      return "Unknown"
   }
 }
 

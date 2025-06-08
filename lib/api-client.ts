@@ -70,7 +70,7 @@ class ApiClient {
     }
 
     // If running on Vercel (production), use relative URL that gets proxied
-    if (process.env.VERCEL || (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app'))) {
+    if (process.env.NEXT_PUBLIC_USE_PROXY === 'true' || (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app'))) {
       return '/api/v1'
     }
 

@@ -9,10 +9,33 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar, Clock, Users, Plus, Sword, Shield, Heart, Zap, Crown, Edit, UserPlus, UserMinus, ExternalLink, AlertCircle, CheckCircle, TrendingUp, ChevronDown, ChevronUp } from "lucide-react"
-import { mockRaids, mockSignUps, mockCharacters, classColors, getRoleFromSpec, mockUsers } from "../lib/mock-data"
+import { Calendar, Clock, Users, Plus, Sword, Shield, Heart, Zap, Crown, Edit, UserPlus, UserMinus, ExternalLink, AlertCircle, CheckCircle, TrendingUp, ChevronDown, ChevronUp, Lock } from "lucide-react"
 import { useAuth } from "../lib/auth-context"
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { apiClient } from "@/lib/api-client"
+import { Raid, Character, SignUp, WowRole, WowClass, Faction } from "@/lib/types"
+import { SharedCharacterForm } from "./shared-character-form"
+import { MessageModal, MessageType } from "./ui/message-modal"
+import { getRoleFromSpec as getRoleFromSpecUtil } from "../lib/character-utils"
+
+// WoW class colors for better UI
+const classColors: Record<string, string> = {
+  DEATH_KNIGHT: '#C41F3B',
+  DRUID: '#FF7D0A',
+  HUNTER: '#A9D271',
+  MAGE: '#40C7EB',
+  PALADIN: '#F58CBA',
+  PRIEST: '#FFFFFF',
+  ROGUE: '#FFF569',
+  SHAMAN: '#0070DE',
+  WARLOCK: '#8787ED',
+  WARRIOR: '#C79C6E'
+}
+
+// Helper function to determine role from class and spec
+const getRoleFromSpec = (wowClass: string, spec: string): string => {
+  return getRoleFromSpecUtil(wowClass, spec)
+}
 
 interface DashboardProps {
   onRaidSelect: (raidId: string) => void
@@ -134,7 +157,8 @@ function CompactSlotCounter({ role, filled, cap, icon }: { role: string, filled:
 
 // Enhanced Character Sign-up Row with Avatar
 function CharacterSignUpRow({ character, signup, role }: { character: any, signup: any, role: string }) {
-  const user = mockUsers.find(u => u.id === character.userId)
+  // User data should come from character.user or signup.user if populated
+  const user = character.user || signup.user
   
   const getRoleColor = (role: string) => {
     switch (role) {
@@ -230,12 +254,15 @@ function EmptyRoleState({ role, count }: { role: string, count: number }) {
 }
 
 // Raid Status Indicator
-function RaidStatusIndicator({ raid, signUpsCount }: { raid: any, signUpsCount: number }) {
-  const totalSlots = (Object.values(raid.caps) as number[]).reduce((a: number, b: number) => a + b, 0)
+function RaidStatusIndicator({ raid, signUpsCount, isUserSignedUp }: { raid: any, signUpsCount: number, isUserSignedUp?: boolean }) {
+  const totalSlots = raid.tankCap + raid.healCap + raid.meleeCap + raid.rangedCap
   const fillPercentage = (signUpsCount / totalSlots) * 100
   
   const getStatus = () => {
-    if (raid.status === 'locked') return { icon: AlertCircle, text: 'Roster Locked', color: 'text-red-500 bg-red-500/10' }
+    // If user is signed up, show that status first
+    if (isUserSignedUp) return { icon: CheckCircle, text: 'You\'re Signed Up', color: 'text-emerald-500 bg-emerald-500/10' }
+    
+    if (raid.status === 'LOCKED') return { icon: AlertCircle, text: 'Roster Locked', color: 'text-red-500 bg-red-500/10' }
     if (fillPercentage >= 100) return { icon: CheckCircle, text: 'Full Roster', color: 'text-emerald-500 bg-emerald-500/10' }
     if (fillPercentage >= 70) return { icon: TrendingUp, text: 'Filling Fast', color: 'text-orange-500 bg-orange-500/10' }
     return { icon: Users, text: 'Open for Sign-ups', color: 'text-blue-500 bg-blue-500/10' }
@@ -253,13 +280,11 @@ function RaidStatusIndicator({ raid, signUpsCount }: { raid: any, signUpsCount: 
 }
 
 // Sign Up Dialog Component
-function SignUpDialog({ raid, onSignUp }: { raid: any, onSignUp: (characterId: string, note: string) => void }) {
+function SignUpDialog({ raid, onSignUp, userCharacters }: { raid: any, onSignUp: (characterId: string, note: string) => void, userCharacters: Character[] }) {
   const { user } = useAuth()
   const [selectedCharacter, setSelectedCharacter] = useState<string>('')
   const [note, setNote] = useState('')
   const [isOpen, setIsOpen] = useState(false)
-
-  const userCharacters = mockCharacters.filter(c => c.userId === user?.id)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -273,6 +298,24 @@ function SignUpDialog({ raid, onSignUp }: { raid: any, onSignUp: (characterId: s
 
   const getCharacterRole = (character: any) => {
     return getRoleFromSpec(character.class, character.spec)
+  }
+
+  const getClassLabel = (classValue: string) => {
+    const classMap: { [key: string]: string } = {
+      'DEATH_KNIGHT': 'Death Knight',
+      'DEMON_HUNTER': 'Demon Hunter',
+      'DRUID': 'Druid',
+      'HUNTER': 'Hunter',
+      'MAGE': 'Mage',
+      'MONK': 'Monk',
+      'PALADIN': 'Paladin',
+      'PRIEST': 'Priest',
+      'ROGUE': 'Rogue',
+      'SHAMAN': 'Shaman',
+      'WARLOCK': 'Warlock',
+      'WARRIOR': 'Warrior'
+    }
+    return classMap[classValue] || classValue
   }
 
   const getRoleIcon = (role: string) => {
@@ -323,15 +366,16 @@ function SignUpDialog({ raid, onSignUp }: { raid: any, onSignUp: (characterId: s
                 <SelectContent>
                   {userCharacters.map((character) => {
                     const role = getCharacterRole(character)
+                    const classLabel = getClassLabel(character.class)
                     return (
                       <SelectItem key={character.id} value={character.id}>
                         <div className="flex items-center gap-2">
                           {getRoleIcon(role)}
-                          <span style={{ color: classColors[character.class] }} className="font-medium">
+                          <span style={{ color: classColors[classLabel] }} className="font-medium">
                             {character.name}
                           </span>
                           <span className="text-muted-foreground text-sm">
-                            {character.spec} {character.class} (GS: {character.gs})
+                            {character.spec} {classLabel} (GS: {character.gearScore})
                           </span>
                         </div>
                       </SelectItem>
@@ -380,16 +424,20 @@ function SignUpDialog({ raid, onSignUp }: { raid: any, onSignUp: (characterId: s
 }
 
 // Expandable Raid Card Component
-function RaidCard({ raid, signUps, isUserSignedUp, user, onRaidSelect, onSignUp }: { 
+function RaidCard({ raid, signUps, isUserSignedUp, user, onRaidSelect, onSignUp, onWithdraw, userCharacters }: { 
   raid: any, 
   signUps: any, 
   isUserSignedUp: boolean, 
   user: any,
   onRaidSelect: (raidId: string) => void,
-  onSignUp: (raidId: string, characterId: string, note: string) => void
+  onSignUp: (raidId: string, characterId: string, note: string) => void,
+  onWithdraw: (raidId: string) => void,
+  userCharacters: Character[]
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
-  const totalSignedUp = Object.values(signUps).flat().length
+  // Provide fallback for signUps if undefined
+  const safeSignUps = signUps || { tank: [], heal: [], melee: [], ranged: [] }
+  const totalSignedUp = Object.values(safeSignUps).flat().length
 
   // Enhanced date formatting
   const raidDate = new Date(raid.date)
@@ -474,7 +522,7 @@ function RaidCard({ raid, signUps, isUserSignedUp, user, onRaidSelect, onSignUp 
               </div>
             </div>
 
-            <RaidStatusIndicator raid={raid} signUpsCount={totalSignedUp} />
+            <RaidStatusIndicator raid={raid} signUpsCount={totalSignedUp} isUserSignedUp={isUserSignedUp} />
             <Badge variant="outline" className="px-2 py-1 text-xs">
               {totalSignedUp}/25
             </Badge>
@@ -490,26 +538,26 @@ function RaidCard({ raid, signUps, isUserSignedUp, user, onRaidSelect, onSignUp 
           <div className="grid grid-cols-4 gap-3 mt-4">
             <CompactSlotCounter 
               role="tank" 
-              filled={signUps.tank.length} 
-              cap={raid.caps.tank}
+              filled={safeSignUps.tank.length} 
+              cap={raid.tankCap}
               icon={<Shield className="w-3 h-3 text-blue-500" />}
             />
             <CompactSlotCounter 
               role="heal" 
-              filled={signUps.heal.length} 
-              cap={raid.caps.heal}
+              filled={safeSignUps.heal.length} 
+              cap={raid.healCap}
               icon={<Heart className="w-3 h-3 text-emerald-500" />}
             />
             <CompactSlotCounter 
               role="melee" 
-              filled={signUps.melee.length} 
-              cap={raid.caps.melee}
+              filled={safeSignUps.melee.length} 
+              cap={raid.meleeCap}
               icon={<Sword className="w-3 h-3 text-red-500" />}
             />
             <CompactSlotCounter 
               role="ranged" 
-              filled={signUps.ranged.length} 
-              cap={raid.caps.ranged}
+              filled={safeSignUps.ranged.length} 
+              cap={raid.rangedCap}
               icon={<Zap className="w-3 h-3 text-purple-500" />}
             />
           </div>
@@ -528,26 +576,26 @@ function RaidCard({ raid, signUps, isUserSignedUp, user, onRaidSelect, onSignUp 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <SlotCounter 
               role="tank" 
-              filled={signUps.tank.length} 
-              cap={raid.caps.tank}
+              filled={safeSignUps.tank.length} 
+              cap={raid.tankCap}
               icon={<Shield className="w-5 h-5 text-blue-500" />}
             />
             <SlotCounter 
               role="heal" 
-              filled={signUps.heal.length} 
-              cap={raid.caps.heal}
+              filled={safeSignUps.heal.length} 
+              cap={raid.healCap}
               icon={<Heart className="w-5 h-5 text-emerald-500" />}
             />
             <SlotCounter 
               role="melee" 
-              filled={signUps.melee.length} 
-              cap={raid.caps.melee}
+              filled={safeSignUps.melee.length} 
+              cap={raid.meleeCap}
               icon={<Sword className="w-5 h-5 text-red-500" />}
             />
             <SlotCounter 
               role="ranged" 
-              filled={signUps.ranged.length} 
-              cap={raid.caps.ranged}
+              filled={safeSignUps.ranged.length} 
+              cap={raid.rangedCap}
               icon={<Zap className="w-5 h-5 text-purple-500" />}
             />
           </div>
@@ -569,15 +617,15 @@ function RaidCard({ raid, signUps, isUserSignedUp, user, onRaidSelect, onSignUp 
               <div className="space-y-3">
                 <h4 className="font-medium text-foreground flex items-center gap-2">
                   <Shield className="w-4 h-4 text-blue-500" />
-                  Tanks ({signUps.tank.length}/{raid.caps.tank})
+                  Tanks ({safeSignUps.tank.length}/{raid.tankCap})
                 </h4>
                 <div className="space-y-2">
-                  {signUps.tank.length > 0 ? (
-                    signUps.tank.map(({ signup, character }: any) => (
+                  {safeSignUps.tank.length > 0 ? (
+                    safeSignUps.tank.map(({ signup, character }: any) => (
                       <CharacterSignUpRow key={signup.id} character={character} signup={signup} role="tank" />
                     ))
                   ) : (
-                    <EmptyRoleState role="tank" count={raid.caps.tank} />
+                    <EmptyRoleState role="tank" count={raid.tankCap} />
                   )}
                 </div>
               </div>
@@ -586,15 +634,15 @@ function RaidCard({ raid, signUps, isUserSignedUp, user, onRaidSelect, onSignUp 
               <div className="space-y-3">
                 <h4 className="font-medium text-foreground flex items-center gap-2">
                   <Heart className="w-4 h-4 text-emerald-500" />
-                  Healers ({signUps.heal.length}/{raid.caps.heal})
+                  Healers ({safeSignUps.heal.length}/{raid.healCap})
                 </h4>
                 <div className="space-y-2">
-                  {signUps.heal.length > 0 ? (
-                    signUps.heal.map(({ signup, character }: any) => (
+                  {safeSignUps.heal.length > 0 ? (
+                    safeSignUps.heal.map(({ signup, character }: any) => (
                       <CharacterSignUpRow key={signup.id} character={character} signup={signup} role="heal" />
                     ))
                   ) : (
-                    <EmptyRoleState role="heal" count={raid.caps.heal - signUps.heal.length} />
+                    <EmptyRoleState role="heal" count={raid.healCap - safeSignUps.heal.length} />
                   )}
                 </div>
               </div>
@@ -603,15 +651,15 @@ function RaidCard({ raid, signUps, isUserSignedUp, user, onRaidSelect, onSignUp 
               <div className="space-y-3">
                 <h4 className="font-medium text-foreground flex items-center gap-2">
                   <Sword className="w-4 h-4 text-red-500" />
-                  Melee DPS ({signUps.melee.length}/{raid.caps.melee})
+                  Melee DPS ({safeSignUps.melee.length}/{raid.meleeCap})
                 </h4>
                 <div className="space-y-2">
-                  {signUps.melee.length > 0 ? (
-                    signUps.melee.map(({ signup, character }: any) => (
+                  {safeSignUps.melee.length > 0 ? (
+                    safeSignUps.melee.map(({ signup, character }: any) => (
                       <CharacterSignUpRow key={signup.id} character={character} signup={signup} role="melee" />
                     ))
                   ) : (
-                    <EmptyRoleState role="melee" count={raid.caps.melee - signUps.melee.length} />
+                    <EmptyRoleState role="melee" count={raid.meleeCap - safeSignUps.melee.length} />
                   )}
                 </div>
               </div>
@@ -620,15 +668,15 @@ function RaidCard({ raid, signUps, isUserSignedUp, user, onRaidSelect, onSignUp 
               <div className="space-y-3">
                 <h4 className="font-medium text-foreground flex items-center gap-2">
                   <Zap className="w-4 h-4 text-purple-500" />
-                  Ranged DPS ({signUps.ranged.length}/{raid.caps.ranged})
+                  Ranged DPS ({safeSignUps.ranged.length}/{raid.rangedCap})
                 </h4>
                 <div className="space-y-2">
-                  {signUps.ranged.length > 0 ? (
-                    signUps.ranged.map(({ signup, character }: any) => (
+                  {safeSignUps.ranged.length > 0 ? (
+                    safeSignUps.ranged.map(({ signup, character }: any) => (
                       <CharacterSignUpRow key={signup.id} character={character} signup={signup} role="ranged" />
                     ))
                   ) : (
-                    <EmptyRoleState role="ranged" count={raid.caps.ranged - signUps.ranged.length} />
+                    <EmptyRoleState role="ranged" count={raid.rangedCap - safeSignUps.ranged.length} />
                   )}
                 </div>
               </div>
@@ -646,14 +694,28 @@ function RaidCard({ raid, signUps, isUserSignedUp, user, onRaidSelect, onSignUp 
               View Full Details
             </Button>
             {isUserSignedUp ? (
-              <Button variant="destructive" className="btn-enhanced flex-1 gap-2">
+              <Button 
+                variant="destructive" 
+                className="btn-enhanced flex-1 gap-2"
+                onClick={() => onWithdraw(raid.id)}
+                disabled={raid.status === 'LOCKED'}
+              >
                 <UserMinus className="w-4 h-4" />
-                Withdraw from Raid
+                {raid.status === 'LOCKED' ? 'Roster Locked' : 'Withdraw from Raid'}
+              </Button>
+            ) : raid.status === 'LOCKED' ? (
+              <Button 
+                variant="outline" 
+                className="btn-enhanced flex-1 gap-2"
+                disabled
+              >
+                <Lock className="w-4 h-4" />
+                Roster Locked
               </Button>
             ) : (
               <SignUpDialog raid={raid} onSignUp={(characterId, note) => {
                 onSignUp(raid.id, characterId, note)
-              }} />
+              }} userCharacters={userCharacters} />
             )}
           </div>
         </CardContent>
@@ -663,7 +725,7 @@ function RaidCard({ raid, signUps, isUserSignedUp, user, onRaidSelect, onSignUp 
 }
 
 // Create Raid Form Component
-function CreateRaidForm() {
+function CreateRaidForm({ onRaidCreated }: { onRaidCreated?: () => void }) {
   const [formData, setFormData] = useState({
     title: '',
     instance: '',
@@ -675,6 +737,29 @@ function CreateRaidForm() {
     meleeCap: 9,
     rangedCap: 9
   })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  
+  // Modal state
+  const [messageModal, setMessageModal] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    type?: MessageType
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info'
+  })
+
+  const showMessage = (title: string, message: string, type: MessageType = 'info') => {
+    setMessageModal({
+      isOpen: true,
+      title,
+      message,
+      type
+    })
+  }
 
   const instances = [
     'Icecrown Citadel',
@@ -687,22 +772,38 @@ function CreateRaidForm() {
     'Vault of Archavon'
   ]
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Here you would normally submit to an API
-    console.log('Creating raid:', formData)
-    // Reset form
-    setFormData({
-      title: '',
-      instance: '',
-      date: '',
-      startTime: '',
-      description: '',
-      tankCap: 2,
-      healCap: 5,
-      meleeCap: 9,
-      rangedCap: 9
-    })
+    setIsSubmitting(true)
+    
+    try {
+      await apiClient.createRaid(formData)
+      
+      // Reset form
+      setFormData({
+        title: '',
+        instance: '',
+        date: '',
+        startTime: '',
+        description: '',
+        tankCap: 2,
+        healCap: 5,
+        meleeCap: 9,
+        rangedCap: 9
+      })
+      
+      // Notify parent to refresh data
+      if (onRaidCreated) {
+        onRaidCreated()
+      }
+      
+      showMessage('Success', 'Raid created successfully!', 'success')
+    } catch (err) {
+      console.error('Error creating raid:', err)
+      showMessage('Error', err instanceof Error ? err.message : 'Failed to create raid', 'error')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -821,66 +922,146 @@ function CreateRaidForm() {
       </div>
 
       <div className="flex gap-3 pt-4">
-        <Button type="submit" className="flex-1">
-          Create Raid
+        <Button type="submit" className="flex-1" disabled={isSubmitting}>
+          {isSubmitting ? 'Creating...' : 'Create Raid'}
         </Button>
-        <Button type="button" variant="outline" className="flex-1">
+        <Button type="button" variant="outline" className="flex-1" disabled={isSubmitting}>
           Cancel
         </Button>
       </div>
+
+      {/* Modal */}
+      <MessageModal
+        isOpen={messageModal.isOpen}
+        onClose={() => setMessageModal(prev => ({ ...prev, isOpen: false }))}
+        title={messageModal.title}
+        message={messageModal.message}
+        type={messageModal.type}
+      />
     </form>
   )
 }
 
+
+
 export function Dashboard({ onRaidSelect }: DashboardProps) {
   const { user } = useAuth()
+  const [raids, setRaids] = useState<Raid[]>([])
+  const [userCharacters, setUserCharacters] = useState<Character[]>([])
+  const [userSignUps, setUserSignUps] = useState<SignUp[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  
+  // Modal state
+  const [messageModal, setMessageModal] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    type?: MessageType
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info'
+  })
 
-  const upcomingRaids = mockRaids
+  const showMessage = (title: string, message: string, type: MessageType = 'info') => {
+    setMessageModal({
+      isOpen: true,
+      title,
+      message,
+      type
+    })
+  }
+
+  // Fetch data function
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      // Fetch all data in parallel
+      const [raidsData, charactersData, signUpsData] = await Promise.all([
+        apiClient.getRaids(),
+        apiClient.getCharacters(),
+        apiClient.getSignUps()
+      ])
+      
+      setRaids(raidsData)
+      setUserCharacters(charactersData)
+      setUserSignUps(signUpsData)
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err)
+      setError(err instanceof Error ? err.message : 'Failed to load data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Fetch data on component mount
+  useEffect(() => {
+    if (user) {
+      fetchData()
+    }
+  }, [user])
+
+  // Filter upcoming raids
+  const upcomingRaids = raids
     .filter((raid) => new Date(raid.date) >= new Date())
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
-  const userSignUps = mockSignUps.filter((signup) => {
-    const character = mockCharacters.find((c) => c.id === signup.characterId)
-    return character?.userId === user?.id
-  })
-
-  const userCharacters = mockCharacters.filter((c) => c.userId === user?.id)
-
   // Handle sign-up for raid
-  const handleSignUp = (raidId: string, characterId: string, note: string) => {
-    // In a real app, this would make an API call
-    console.log('Signing up for raid:', { raidId, characterId, note })
-    
-    // Mock implementation - in reality you'd call an API
-    const newSignUp = {
-      id: `signup-${Date.now()}`,
-      raidId,
-      characterId,
-      note,
-      createdAt: new Date().toISOString(),
-      status: 'confirmed' as const
+  const handleSignUp = async (raidId: string, characterId: string, note: string) => {
+    try {
+      await apiClient.createSignUp({ raidId, characterId, note })
+      
+      // Refresh sign-ups data
+      const updatedSignUps = await apiClient.getSignUps()
+      setUserSignUps(updatedSignUps)
+      
+      // Show success message
+      showMessage('Success', 'Successfully signed up for the raid!', 'success')
+    } catch (err) {
+      console.error('Error signing up for raid:', err)
+      showMessage('Error', err instanceof Error ? err.message : 'Failed to sign up for raid', 'error')
     }
-    
-    // You could show a success message here
-    alert(`Successfully signed up for the raid!`)
-    
-    // In a real app, you'd update the state or refetch data
-    // For now, we'll just log it
+  }
+
+  // Handle withdraw from raid
+  const handleWithdraw = async (raidId: string) => {
+    try {
+      // Find the user's signup for this raid
+      const userSignUp = userSignUps.find(s => s.raidId === raidId)
+      if (userSignUp) {
+        await apiClient.deleteSignUp(userSignUp.id)
+        // Refresh sign-ups data
+        const updatedSignUps = await apiClient.getSignUps()
+        setUserSignUps(updatedSignUps)
+        showMessage('Success', 'Successfully withdrew from raid!', 'success')
+      }
+    } catch (err) {
+      console.error('Error withdrawing from raid:', err)
+      showMessage('Error', err instanceof Error ? err.message : 'Failed to withdraw from raid', 'error')
+    }
   }
 
   // Get sign-ups for raid grouped by role
   const getSignUpsByRole = (raidId: string) => {
-    const raidSignUps = mockSignUps.filter(s => s.raidId === raidId)
+    const raidSignUps = userSignUps.filter(s => s.raidId === raidId)
     const signUpsWithCharacters = raidSignUps.map(signup => {
-      const character = mockCharacters.find(c => c.id === signup.characterId)
-      return { signup, character, role: getRoleFromSpec(character?.class || '', character?.spec || '') }
+      const character = userCharacters.find(c => c.id === signup.characterId)
+      return { 
+        signup, 
+        character, 
+        role: character ? getRoleFromSpec(character.class, character.spec) : WowRole.MELEE 
+      }
     }).filter(item => item.character)
 
     return {
-      tank: signUpsWithCharacters.filter(item => item.role === 'tank'),
-      heal: signUpsWithCharacters.filter(item => item.role === 'heal'),
-      melee: signUpsWithCharacters.filter(item => item.role === 'melee'),
-      ranged: signUpsWithCharacters.filter(item => item.role === 'ranged'),
+      tank: signUpsWithCharacters.filter(item => item.role === WowRole.TANK),
+      heal: signUpsWithCharacters.filter(item => item.role === WowRole.HEAL),
+      melee: signUpsWithCharacters.filter(item => item.role === WowRole.MELEE),
+      ranged: signUpsWithCharacters.filter(item => item.role === WowRole.RANGED),
     }
   }
 
@@ -897,11 +1078,49 @@ export function Dashboard({ onRaidSelect }: DashboardProps) {
     }
   }
 
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="space-y-8">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold text-foreground mb-2">Welcome back, {user?.username}</h1>
+          <p className="text-muted-foreground">Loading your raid data...</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className="wotlk-card">
+              <CardContent className="p-6">
+                <div className="animate-pulse">
+                  <div className="h-4 bg-muted rounded w-3/4 mb-2"></div>
+                  <div className="h-8 bg-muted rounded w-1/2"></div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="space-y-8">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold text-foreground mb-2">Welcome back, {user?.username}</h1>
+          <div className="bg-destructive/10 border border-destructive/20 rounded-md p-4">
+            <p className="text-destructive">Error loading data: {error}</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-8">
       {/* Welcome Section */}
       <div className="text-center">
-        <h1 className="text-3xl font-bold text-foreground mb-2">Welcome back, {user?.name}</h1>
+        <h1 className="text-3xl font-bold text-foreground mb-2">Welcome back, {user?.username}</h1>
         <p className="text-muted-foreground">
           Manage your raids and characters for World of Warcraft: Wrath of the Lich King
         </p>
@@ -954,7 +1173,7 @@ export function Dashboard({ onRaidSelect }: DashboardProps) {
                 <p className="text-muted-foreground text-sm">Avg Gear Score</p>
                 <p className="text-2xl font-bold text-foreground">
                   {userCharacters.length > 0
-                    ? Math.round(userCharacters.reduce((sum, c) => sum + c.gs, 0) / userCharacters.length)
+                    ? Math.round(userCharacters.reduce((sum, c) => sum + c.gearScore, 0) / userCharacters.length)
                     : 0}
                 </p>
               </div>
@@ -971,7 +1190,7 @@ export function Dashboard({ onRaidSelect }: DashboardProps) {
             <Crown className="w-6 h-6 text-yellow-500" />
             Upcoming Raids
           </h2>
-          {(user?.role === "rl" || user?.role === "admin") && (
+          {(user?.role === "RAID_LEADER" || user?.role === "ADMIN") && (
             <Dialog>
               <DialogTrigger asChild>
                 <Button className="gap-2">
@@ -986,7 +1205,7 @@ export function Dashboard({ onRaidSelect }: DashboardProps) {
                     Create New Raid
                   </DialogTitle>
                 </DialogHeader>
-                <CreateRaidForm />
+                <CreateRaidForm onRaidCreated={fetchData} />
               </DialogContent>
             </Dialog>
           )}
@@ -1009,6 +1228,8 @@ export function Dashboard({ onRaidSelect }: DashboardProps) {
                   onSignUp={(raidId, characterId, note) => {
                     handleSignUp(raidId, characterId, note)
                   }}
+                  onWithdraw={handleWithdraw}
+                  userCharacters={userCharacters}
                 />
               )
             })}
@@ -1020,7 +1241,7 @@ export function Dashboard({ onRaidSelect }: DashboardProps) {
                 <Calendar className="w-16 h-16 text-muted-foreground/50 mx-auto mb-6" />
                 <h3 className="text-xl font-semibold text-foreground mb-2">No Upcoming Raids</h3>
                 <p className="text-muted-foreground mb-6">Check back later or contact your raid leaders</p>
-                {(user?.role === "rl" || user?.role === "admin") && (
+                {(user?.role === "RAID_LEADER" || user?.role === "ADMIN") && (
                   <Dialog>
                     <DialogTrigger asChild>
                       <Button className="gap-2">
@@ -1035,7 +1256,7 @@ export function Dashboard({ onRaidSelect }: DashboardProps) {
                           Create New Raid
                         </DialogTitle>
                       </DialogHeader>
-                      <CreateRaidForm />
+                      <CreateRaidForm onRaidCreated={fetchData} />
                     </DialogContent>
                   </Dialog>
                 )}
@@ -1058,8 +1279,8 @@ export function Dashboard({ onRaidSelect }: DashboardProps) {
             {userSignUps.length > 0 ? (
               <div className="space-y-3">
                 {userSignUps.map((signup) => {
-                  const character = mockCharacters.find((c) => c.id === signup.characterId)
-                  const raid = mockRaids.find((r) => r.id === signup.raidId)
+                  const character = userCharacters.find((c) => c.id === signup.characterId)
+                  const raid = raids.find((r) => r.id === signup.raidId)
                   if (!character || !raid) return null
 
                   return (
@@ -1078,14 +1299,34 @@ export function Dashboard({ onRaidSelect }: DashboardProps) {
                           {raid.title} • {new Date(raid.date).toLocaleDateString()}
                         </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onRaidSelect(raid.id)}
-                        className="text-muted-foreground hover:text-foreground"
-                      >
-                        View
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onRaidSelect(raid.id)}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          View
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              await apiClient.deleteSignUp(signup.id)
+                              // Refresh sign-ups data
+                              const updatedSignUps = await apiClient.getSignUps()
+                              setUserSignUps(updatedSignUps)
+                              showMessage('Success', 'Successfully withdrew from raid!', 'success')
+                            } catch (err) {
+                              console.error('Error withdrawing from raid:', err)
+                              showMessage('Error', err instanceof Error ? err.message : 'Failed to withdraw from raid', 'error')
+                            }
+                          }}
+                        >
+                          Withdraw
+                        </Button>
+                      </div>
                     </div>
                   )
                 })}
@@ -1108,10 +1349,23 @@ export function Dashboard({ onRaidSelect }: DashboardProps) {
                 <Sword className="w-5 h-5 text-yellow-500" />
                 Your Characters
               </div>
-              <Button size="sm" className="bg-primary hover:bg-primary/90">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Character
-              </Button>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="bg-primary hover:bg-primary/90">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Character
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Sword className="w-5 h-5 text-yellow-500" />
+                      Add New Character
+                    </DialogTitle>
+                  </DialogHeader>
+                  <SharedCharacterForm onCharacterCreated={fetchData} />
+                </DialogContent>
+              </Dialog>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -1132,11 +1386,11 @@ export function Dashboard({ onRaidSelect }: DashboardProps) {
                           {character.spec} {character.class}
                         </div>
                         <div className="flex items-center justify-between">
-                          <span>GS: {character.gs}</span>
+                          <span>GS: {character.gearScore}</span>
                           <Badge 
                             variant="outline" 
                             className={`text-xs px-2 py-0 ${
-                              character.faction === 'Alliance' 
+                              character.faction === Faction.ALLIANCE 
                                 ? 'border-blue-500/30 text-blue-600 bg-blue-500/10' 
                                 : 'border-red-500/30 text-red-600 bg-red-500/10'
                             }`}
@@ -1159,6 +1413,15 @@ export function Dashboard({ onRaidSelect }: DashboardProps) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Modal */}
+      <MessageModal
+        isOpen={messageModal.isOpen}
+        onClose={() => setMessageModal(prev => ({ ...prev, isOpen: false }))}
+        title={messageModal.title}
+        message={messageModal.message}
+        type={messageModal.type}
+      />
     </div>
   )
 }

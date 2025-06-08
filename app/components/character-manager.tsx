@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,89 +9,101 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Plus, Edit, Trash2, ExternalLink, Shield, Heart, Sword, Zap } from "lucide-react"
-import { mockCharacters, classColors, getRoleFromSpec, type Character } from "../lib/mock-data"
+import { getRoleFromSpec } from "../lib/character-utils"
+import { classColors } from "../lib/mock-data"
 import { useAuth } from "../lib/auth-context"
+import { apiClient } from "@/lib/api-client"
+import { Character, WowClass, Faction } from "@/lib/types"
+import { SharedCharacterForm } from "./shared-character-form"
+import { useModal } from "../contexts/modal-context"
 
 const wowClasses = [
-  "Death Knight",
-  "Druid",
-  "Hunter",
-  "Mage",
-  "Paladin",
-  "Priest",
-  "Rogue",
-  "Shaman",
-  "Warlock",
-  "Warrior",
+  { value: "DEATH_KNIGHT", label: "Death Knight" },
+  { value: "DRUID", label: "Druid" },
+  { value: "HUNTER", label: "Hunter" },
+  { value: "MAGE", label: "Mage" },
+  { value: "PALADIN", label: "Paladin" },
+  { value: "PRIEST", label: "Priest" },
+  { value: "ROGUE", label: "Rogue" },
+  { value: "SHAMAN", label: "Shaman" },
+  { value: "WARLOCK", label: "Warlock" },
+  { value: "WARRIOR", label: "Warrior" },
 ]
 
 const specsByClass: Record<string, string[]> = {
-  "Death Knight": ["Blood", "Frost", "Unholy"],
-  Druid: ["Balance", "Feral", "Restoration"],
-  Hunter: ["Beast Mastery", "Marksmanship", "Survival"],
-  Mage: ["Arcane", "Fire", "Frost"],
-  Paladin: ["Holy", "Protection", "Retribution"],
-  Priest: ["Discipline", "Holy", "Shadow"],
-  Rogue: ["Assassination", "Combat", "Subtlety"],
-  Shaman: ["Elemental", "Enhancement", "Restoration"],
-  Warlock: ["Affliction", "Demonology", "Destruction"],
-  Warrior: ["Arms", "Fury", "Protection"],
+  "DEATH_KNIGHT": ["Blood", "Frost", "Unholy"],
+  "DRUID": ["Balance", "Feral", "Restoration"],
+  "HUNTER": ["Beast Mastery", "Marksmanship", "Survival"],
+  "MAGE": ["Arcane", "Fire", "Frost"],
+  "PALADIN": ["Holy", "Protection", "Retribution"],
+  "PRIEST": ["Discipline", "Holy", "Shadow"],
+  "ROGUE": ["Assassination", "Combat", "Subtlety"],
+  "SHAMAN": ["Elemental", "Enhancement", "Restoration"],
+  "WARLOCK": ["Affliction", "Demonology", "Destruction"],
+  "WARRIOR": ["Arms", "Fury", "Protection"],
 }
 
 export function CharacterManager() {
   const { user } = useAuth()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingCharacter, setEditingCharacter] = useState<Character | null>(null)
-  const [formData, setFormData] = useState({
-    name: "",
-    class: "",
-    spec: "",
-    gs: "",
-    armoryUrl: "",
-    faction: "Alliance" as "Alliance" | "Horde",
-  })
+  const [userCharacters, setUserCharacters] = useState<Character[]>([])
+  const [loading, setLoading] = useState(true)
+  
+  // Global modal hook
+  const { showMessage, showConfirmation } = useModal()
 
-  const userCharacters = mockCharacters.filter((c) => c.userId === user?.id)
+
+  // Fetch characters on mount
+  useEffect(() => {
+    const fetchCharacters = async () => {
+      try {
+        setLoading(true)
+        const characters = await apiClient.getCharacters()
+        setUserCharacters(characters)
+      } catch (err) {
+        console.error('Error fetching characters:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (user) {
+      fetchCharacters()
+    }
+  }, [user])
 
   const resetForm = () => {
-    setFormData({
-      name: "",
-      class: "",
-      spec: "",
-      gs: "",
-      armoryUrl: "",
-      faction: "Alliance",
-    })
     setEditingCharacter(null)
   }
 
   const handleOpenDialog = (character?: Character) => {
     if (character) {
       setEditingCharacter(character)
-      setFormData({
-        name: character.name,
-        class: character.class,
-        spec: character.spec,
-        gs: character.gs.toString(),
-        armoryUrl: character.armoryUrl,
-        faction: character.faction,
-      })
     } else {
       resetForm()
     }
     setIsDialogOpen(true)
   }
 
-  const handleSave = () => {
-    // Mock save logic
-    console.log("Saving character:", formData)
-    setIsDialogOpen(false)
-    resetForm()
-  }
-
-  const handleDelete = (characterId: string) => {
-    // Mock delete logic
-    console.log("Deleting character:", characterId)
+  const handleDelete = async (characterId: string) => {
+    const character = userCharacters.find(c => c.id === characterId)
+    showConfirmation(
+      'Delete Character',
+      `Are you sure you want to delete ${character?.name}? This action cannot be undone.`,
+      async () => {
+        try {
+          await apiClient.deleteCharacter(characterId)
+          // Refresh characters list
+          const characters = await apiClient.getCharacters()
+          setUserCharacters(characters)
+          showMessage('Success', 'Character deleted successfully!', 'success')
+        } catch (err) {
+          console.error('Error deleting character:', err)
+          showMessage('Error', err instanceof Error ? err.message : 'Failed to delete character', 'error')
+        }
+      }
+    )
   }
 
   const getRoleIcon = (role: string) => {
@@ -128,140 +140,38 @@ export function CharacterManager() {
             <DialogHeader>
               <DialogTitle>{editingCharacter ? "Edit Character" : "Add New Character"}</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="name" className="text-slate-300">
-                  Character Name
-                </Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                  className="bg-slate-700 border-slate-600 text-slate-100"
-                  placeholder="Enter character name"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="faction" className="text-slate-300">
-                    Faction
-                  </Label>
-                  <Select
-                    value={formData.faction}
-                    onValueChange={(value: "Alliance" | "Horde") =>
-                      setFormData((prev) => ({ ...prev, faction: value }))
-                    }
-                  >
-                    <SelectTrigger className="bg-slate-700 border-slate-600">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700">
-                      <SelectItem value="Alliance">Alliance</SelectItem>
-                      <SelectItem value="Horde">Horde</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="class" className="text-slate-300">
-                    Class
-                  </Label>
-                  <Select
-                    value={formData.class}
-                    onValueChange={(value) => setFormData((prev) => ({ ...prev, class: value, spec: "" }))}
-                  >
-                    <SelectTrigger className="bg-slate-700 border-slate-600">
-                      <SelectValue placeholder="Select class" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700">
-                      {wowClasses.map((cls) => (
-                        <SelectItem key={cls} value={cls}>
-                          <span style={{ color: classColors[cls] }}>{cls}</span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="spec" className="text-slate-300">
-                    Specialization
-                  </Label>
-                  <Select
-                    value={formData.spec}
-                    onValueChange={(value) => setFormData((prev) => ({ ...prev, spec: value }))}
-                    disabled={!formData.class}
-                  >
-                    <SelectTrigger className="bg-slate-700 border-slate-600">
-                      <SelectValue placeholder="Select spec" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700">
-                      {formData.class &&
-                        specsByClass[formData.class]?.map((spec) => (
-                          <SelectItem key={spec} value={spec}>
-                            {spec}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="gs" className="text-slate-300">
-                    Gear Score
-                  </Label>
-                  <Input
-                    id="gs"
-                    type="number"
-                    value={formData.gs}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, gs: e.target.value }))}
-                    className="bg-slate-700 border-slate-600 text-slate-100"
-                    placeholder="5000"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="armory" className="text-slate-300">
-                  Armory URL (Optional)
-                </Label>
-                <Input
-                  id="armory"
-                  value={formData.armoryUrl}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, armoryUrl: e.target.value }))}
-                  className="bg-slate-700 border-slate-600 text-slate-100"
-                  placeholder="https://wowarmory.com/character/..."
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsDialogOpen(false)}
-                  className="border-slate-600 text-slate-300 hover:bg-slate-700"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleSave}
-                  disabled={!formData.name || !formData.class || !formData.spec || !formData.gs}
-                  className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700"
-                >
-                  {editingCharacter ? "Update" : "Add"} Character
-                </Button>
-              </div>
-            </div>
+            <SharedCharacterForm 
+              editingCharacter={editingCharacter}
+              onCharacterCreated={async () => {
+                const characters = await apiClient.getCharacters()
+                setUserCharacters(characters)
+                setIsDialogOpen(false)
+                resetForm()
+              }}
+              onCharacterUpdated={async () => {
+                const characters = await apiClient.getCharacters()
+                setUserCharacters(characters)
+                setIsDialogOpen(false)
+                resetForm()
+              }}
+              onCancel={() => {
+                setIsDialogOpen(false)
+                resetForm()
+              }}
+            />
           </DialogContent>
         </Dialog>
       </div>
 
-      {userCharacters.length > 0 ? (
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500"></div>
+        </div>
+      ) : userCharacters.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {userCharacters.map((character) => {
             const role = getRoleFromSpec(character.class, character.spec)
+            const classLabel = wowClasses.find(c => c.value === character.class)?.label || character.class
             return (
               <Card
                 key={character.id}
@@ -270,11 +180,11 @@ export function CharacterManager() {
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div>
-                      <CardTitle className="text-lg" style={{ color: classColors[character.class] }}>
+                      <CardTitle className="text-lg" style={{ color: classColors[classLabel] }}>
                         {character.name}
                       </CardTitle>
                       <p className="text-slate-400 text-sm">
-                        {character.spec} {character.class}
+                        {character.spec} {classLabel}
                       </p>
                     </div>
                     <div className="flex items-center gap-1">
@@ -282,7 +192,7 @@ export function CharacterManager() {
                       <Badge 
                         variant="outline" 
                         className={`text-xs px-2 py-0 ${
-                          character.faction === 'Alliance' 
+                          character.faction === Faction.ALLIANCE 
                             ? 'border-blue-500/30 text-blue-600 bg-blue-500/10' 
                             : 'border-red-500/30 text-red-600 bg-red-500/10'
                         }`}
@@ -296,7 +206,7 @@ export function CharacterManager() {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400 text-sm">Gear Score</span>
-                      <span className="text-slate-100 font-medium">{character.gs}</span>
+                      <span className="text-slate-100 font-medium">{character.gearScore}</span>
                     </div>
 
                     <div className="flex items-center justify-between">
@@ -317,16 +227,6 @@ export function CharacterManager() {
                         <Edit className="w-3 h-3 mr-1" />
                         Edit
                       </Button>
-                      {character.armoryUrl && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => window.open(character.armoryUrl, "_blank")}
-                          className="border-slate-600 text-slate-300 hover:bg-slate-700"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                        </Button>
-                      )}
                       <Button
                         variant="outline"
                         size="sm"
@@ -360,6 +260,7 @@ export function CharacterManager() {
           </CardContent>
         </Card>
       )}
+
     </div>
   )
 }

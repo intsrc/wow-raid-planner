@@ -1,12 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, ChevronLeft, ChevronRight, Plus, Clock, Users } from "lucide-react"
-import { mockRaids } from "../lib/mock-data"
+import { Calendar, ChevronLeft, ChevronRight, Plus, Clock, Users, Loader2 } from "lucide-react"
 import { useAuth } from "../lib/auth-context"
+import { apiClient } from "@/lib/api-client"
+import { Raid } from "@/lib/types"
 
 interface CalendarViewProps {
   onRaidSelect: (raidId: string) => void
@@ -16,6 +17,38 @@ export function CalendarView({ onRaidSelect }: CalendarViewProps) {
   const { user } = useAuth()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [view, setView] = useState<"month" | "list">("month")
+  const [raids, setRaids] = useState<Raid[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchRaids()
+  }, [])
+
+  const fetchRaids = async () => {
+    try {
+      setLoading(true)
+      const fetchedRaids = await apiClient.getRaids()
+      setRaids(fetchedRaids)
+      
+      // Auto-navigate to first raid's month if no raids in current month
+      if (fetchedRaids.length > 0) {
+        const currentDateStr = currentDate.toISOString().split("T")[0]
+        const hasRaidInCurrentMonth = fetchedRaids.some(raid => 
+          raid.date.startsWith(currentDateStr.substring(0, 7)) // YYYY-MM
+        )
+        
+        if (!hasRaidInCurrentMonth) {
+          // Navigate to the first raid's month
+          const firstRaidDate = new Date(fetchedRaids[0].date)
+          setCurrentDate(firstRaidDate)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch raids:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear()
@@ -42,8 +75,19 @@ export function CalendarView({ onRaidSelect }: CalendarViewProps) {
 
   const getRaidsForDate = (date: Date | null) => {
     if (!date) return []
-    const dateStr = date.toISOString().split("T")[0]
-    return mockRaids.filter((raid) => raid.date === dateStr)
+    
+    // Use local date comparison to avoid timezone issues
+    const calendarDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+    
+    const matchingRaids = raids.filter((raid: Raid) => {
+      // Create a local date from the raid's date string
+      const raidDate = new Date(raid.date)
+      const raidLocalDate = new Date(raidDate.getFullYear(), raidDate.getMonth(), raidDate.getDate())
+      
+      // Compare local dates
+      return calendarDate.getTime() === raidLocalDate.getTime()
+    })
+    return matchingRaids
   }
 
   const navigateMonth = (direction: "prev" | "next") => {
@@ -76,22 +120,30 @@ export function CalendarView({ onRaidSelect }: CalendarViewProps) {
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case "open":
+    switch (status.toUpperCase()) {
+      case "OPEN":
         return "border-green-500 text-green-400 bg-green-500/10"
-      case "full":
+      case "FULL":
         return "border-yellow-500 text-yellow-400 bg-yellow-500/10"
-      case "locked":
+      case "LOCKED":
         return "border-red-500 text-red-400 bg-red-500/10"
       default:
         return "border-slate-500 text-slate-400 bg-slate-500/10"
     }
   }
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
   if (view === "list") {
-    const upcomingRaids = mockRaids
-      .filter((raid) => new Date(raid.date) >= new Date())
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    const upcomingRaids = raids
+      .filter((raid: Raid) => new Date(raid.date) >= new Date())
+      .sort((a: Raid, b: Raid) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
     return (
       <div className="space-y-6">
@@ -119,7 +171,7 @@ export function CalendarView({ onRaidSelect }: CalendarViewProps) {
                 List
               </Button>
             </div>
-            {(user?.role === "rl" || user?.role === "admin") && (
+            {(user?.role === "RAID_LEADER" || user?.role === "ADMIN") && (
               <Button className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-slate-900">
                 <Plus className="w-4 h-4 mr-2" />
                 Create Raid
@@ -155,7 +207,7 @@ export function CalendarView({ onRaidSelect }: CalendarViewProps) {
                       </div>
                       <div className="flex items-center gap-1">
                         <Users className="w-4 h-4" />
-                        {raid.caps.tank + raid.caps.heal + raid.caps.melee + raid.caps.ranged} slots
+                        {raid.tankCap + raid.healCap + raid.meleeCap + raid.rangedCap} slots
                       </div>
                     </div>
                   </div>
@@ -197,7 +249,7 @@ export function CalendarView({ onRaidSelect }: CalendarViewProps) {
               List
             </Button>
           </div>
-          {(user?.role === "rl" || user?.role === "admin") && (
+          {(user?.role === "RAID_LEADER" || user?.role === "ADMIN") && (
             <Button className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-slate-900">
               <Plus className="w-4 h-4 mr-2" />
               Create Raid

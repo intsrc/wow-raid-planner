@@ -64,17 +64,26 @@ class ApiClient {
   }
 
   private getApiUrl(): string {
-    // Check if custom API URL is set
-    if (process.env.NEXT_PUBLIC_API_URL) {
-      return process.env.NEXT_PUBLIC_API_URL
-    }
-
-    // If running on Vercel (production), use relative URL that gets proxied
-    if (process.env.NEXT_PUBLIC_USE_PROXY === 'true' || (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app'))) {
+    // Force proxy mode if explicitly requested
+    if (process.env.NEXT_PUBLIC_USE_PROXY === 'true') {
+      console.log('🔄 Using proxy mode (NEXT_PUBLIC_USE_PROXY=true)')
       return '/api/v1'
     }
 
-    // For local development, use the remote server directly
+    // If running on Vercel, use relative URL that gets proxied (even if NEXT_PUBLIC_API_URL is set)
+    if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+      console.log('🔄 Detected Vercel environment, using proxy mode')
+      return '/api/v1'
+    }
+
+    // Check if custom API URL is set (for local development)
+    if (process.env.NEXT_PUBLIC_API_URL) {
+      console.log('🔄 Using custom API URL:', process.env.NEXT_PUBLIC_API_URL)
+      return process.env.NEXT_PUBLIC_API_URL
+    }
+
+    // Fallback for local development
+    console.log('🔄 Using fallback API URL for local development')
     return 'http://138.2.151.108:3001/api/v1'
   }
 

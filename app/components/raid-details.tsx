@@ -308,27 +308,122 @@ export function RaidDetails({ raidId, onBack, onRosterBuilder }: RaidDetailsProp
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="outline" onClick={onBack} className="border-slate-600 text-slate-300 hover:bg-slate-700">
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Calendar
-        </Button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-slate-100">{raid.title}</h1>
-          <p className="text-slate-400">{raid.instance}</p>
-        </div>
-        {(user?.role === 'RAID_LEADER' || user?.role === 'ADMIN') && (
-          <div className="flex gap-2">
+      {/* Mobile-Optimized Header */}
+      <div className="space-y-4 md:space-y-0">
+        {/* Back Button and Title */}
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-4">
             <Button
-              onClick={() => onRosterBuilder(raid.id)}
-              className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700"
+              variant="outline"
+              size="sm"
+              onClick={onBack}
+              className="flex-shrink-0"
             >
-              <Settings className="w-4 h-4 mr-2" />
-              Roster Builder
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              <span className="hidden sm:inline">Back to Dashboard</span>
+              <span className="sm:hidden">Back</span>
+            </Button>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-2xl md:text-3xl font-bold text-foreground truncate">{raid.title}</h1>
+              <p className="text-muted-foreground">{raid.instance}</p>
+            </div>
+          </div>
+          
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+            {(user?.role === "RAID_LEADER" || user?.role === "ADMIN") && (
+              <Button
+                onClick={() => onRosterBuilder(raid.id)}
+                className="bg-gradient-to-r from-yellow-600 to-yellow-700 hover:from-yellow-700 hover:to-yellow-800 text-white font-medium"
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                <span className="hidden sm:inline">Roster Builder</span>
+                <span className="sm:hidden">Roster</span>
+              </Button>
+            )}
+            <Button variant="outline" className="text-foreground">
+              <Edit className="w-4 h-4 mr-2" />
+              <span className="hidden sm:inline">Edit Raid</span>
+              <span className="sm:hidden">Edit</span>
             </Button>
           </div>
-        )}
+        </div>
+
+        {/* Raid Info Cards - Mobile Optimized */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Date & Time */}
+          <Card className="wotlk-card">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-blue-500/10">
+                  <Calendar className="w-5 h-5 text-blue-500" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-muted-foreground">Date & Time</p>
+                  <p className="font-semibold text-foreground truncate">
+                    {new Date(raid.date).toLocaleDateString()}
+                  </p>
+                  <p className="text-sm text-muted-foreground">{raid.startTime}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Status */}
+          <Card className="wotlk-card">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-green-500/10">
+                  <Users className="w-5 h-5 text-green-500" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-muted-foreground">Status</p>
+                  <Badge variant="outline" className={getStatusColor(raid.status)}>
+                    {raid.status}
+                  </Badge>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Total Signups */}
+          <Card className="wotlk-card">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-purple-500/10">
+                  <Users className="w-5 h-5 text-purple-500" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-muted-foreground">Signups</p>
+                  <p className="font-semibold text-foreground">
+                    {raidSignUps.length}/{raid.tankCap + raid.healCap + raid.meleeCap + raid.rangedCap}
+                  </p>
+                  <p className="text-xs text-muted-foreground">players</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Roster Status */}
+          <Card className="wotlk-card">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-yellow-500/10">
+                  <Shield className="w-5 h-5 text-yellow-500" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-muted-foreground">Roster</p>
+                  <p className="font-semibold text-foreground">
+                    {raid.isRosterFinalized ? "Finalized" : "Open"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {raid.isRosterFinalized ? "Locked" : "Accepting signups"}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -42,6 +42,10 @@ export function RosterBuilder({ raidId, onBack }: RosterBuilderProps) {
     setHasUnsavedChanges(true)
   }, [rosterSlots])
 
+  // Touch support for mobile drag and drop
+  const [draggedCharacterId, setDraggedCharacterId] = useState<string | null>(null)
+  const [touchStartPosition, setTouchStartPosition] = useState({ x: 0, y: 0 })
+
   // Fetch raid details and related data
   useEffect(() => {
     const fetchRosterData = async () => {
@@ -176,7 +180,8 @@ export function RosterBuilder({ raidId, onBack }: RosterBuilderProps) {
     raidSignUps
       .filter(signup => signup.status === 'CONFIRMED')
       .forEach((signup) => {
-        const character = characters.find((c) => c.id === signup.characterId)
+        // Use character data from signup (populated by API) instead of searching characters array
+        const character = signup.character
         if (character) {
           const role = getRoleFromSpec(character.class, character.spec)
           signUpsByRole[role as keyof typeof signUpsByRole].push({
@@ -203,24 +208,92 @@ export function RosterBuilder({ raidId, onBack }: RosterBuilderProps) {
   const handleDrop = (e: React.DragEvent, slotId: string) => {
     e.preventDefault()
     const characterId = e.dataTransfer.getData("text/plain")
-    const character = characters.find((c) => c.id === characterId)
-    const slot = rosterSlots.find((s) => s.id === slotId)
-
-    if (!character || !slot) return
+    
+    // Find the character from signups data
+    const signup = raidSignUps.find(s => s.character?.id === characterId)
+    const character = signup?.character
+    if (!character) return
 
     const characterRole = getRoleFromSpec(character.class, character.spec)
+    const slot = rosterSlots.find((s) => s.id === slotId)
+    if (!slot) return
 
-    // Check if character role matches slot role
+    // Check if character can fill this role
     if (characterRole !== slot.role) {
-      showMessage(
-        'Role Mismatch', 
-        `Cannot assign ${character.name} (${characterRole}) to ${slot.role} slot`, 
-        'warning'
-      )
+      showMessage('Invalid Assignment', `${character.name} is a ${characterRole} and cannot be assigned to a ${slot.role} slot.`, 'error')
       return
     }
 
-    setRosterSlots((prev) => prev.map((s) => (s.id === slotId ? { ...s, characterId } : s)))
+    // Update roster slots
+    setRosterSlots((prev) =>
+      prev.map((s) => {
+        if (s.id === slotId) {
+          return { ...s, characterId }
+        }
+        // Remove character from any other slot they might be in
+        if (s.characterId === characterId) {
+          return { ...s, characterId: undefined }
+        }
+        return s
+      })
+    )
+  }
+
+  // Mobile touch handlers
+  const handleTouchStart = (e: React.TouchEvent, characterId: string) => {
+    const touch = e.touches[0]
+    setTouchStartPosition({ x: touch.clientX, y: touch.clientY })
+    setDraggedCharacterId(characterId)
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    e.preventDefault() // Prevent scrolling
+  }
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!draggedCharacterId) return
+
+    const touch = e.changedTouches[0]
+    const element = document.elementFromPoint(touch.clientX, touch.clientY)
+    
+    // Find the drop target slot
+    const slotElement = element?.closest('[data-slot-id]')
+    if (slotElement) {
+      const slotId = slotElement.getAttribute('data-slot-id')
+      if (slotId) {
+        // Find character from signups data
+        const signup = raidSignUps.find(s => s.character?.id === draggedCharacterId)
+        const character = signup?.character
+        if (!character) return
+
+        const characterRole = getRoleFromSpec(character.class, character.spec)
+        const slot = rosterSlots.find((s) => s.id === slotId)
+        if (!slot) return
+
+        // Check if character can fill this role
+        if (characterRole !== slot.role) {
+          showMessage('Invalid Assignment', `${character.name} is a ${characterRole} and cannot be assigned to a ${slot.role} slot.`, 'error')
+          setDraggedCharacterId(null)
+          return
+        }
+
+        // Update roster slots
+        setRosterSlots((prev) =>
+          prev.map((s) => {
+            if (s.id === slotId) {
+              return { ...s, characterId: draggedCharacterId }
+            }
+            // Remove character from any other slot they might be in
+            if (s.characterId === draggedCharacterId) {
+              return { ...s, characterId: undefined }
+            }
+            return s
+          })
+        )
+      }
+    }
+
+    setDraggedCharacterId(null)
   }
 
   const handleRemoveFromSlot = (slotId: string) => {
@@ -260,8 +333,6 @@ export function RosterBuilder({ raidId, onBack }: RosterBuilderProps) {
   const getTotalSlots = () => {
     return rosterSlots.length
   }
-
-
 
   const postToDiscord = () => {
     // Mock Discord webhook
@@ -344,64 +415,89 @@ export function RosterBuilder({ raidId, onBack }: RosterBuilderProps) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" onClick={onBack} className="border-slate-600 text-slate-300 hover:bg-slate-700">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Raid
-          </Button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-slate-100">{raid.title} - Roster Builder</h1>
-              {hasUnsavedChanges && (
-                <Badge variant="outline" className="border-yellow-500 text-yellow-400">
-                  Unsaved Changes
-                </Badge>
-              )}
-              {raid.isRosterFinalized && (
-                <Badge variant="outline" className="border-green-500 text-green-400">
-                  🏆 Finalized
-                </Badge>
-              )}
+      {/* Mobile-Optimized Header */}
+      <div className="space-y-4 md:space-y-0">
+        {/* Back Button and Title - Mobile Layout */}
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-3">
+            <Button 
+              variant="outline" 
+              onClick={onBack} 
+              className="text-foreground flex-shrink-0"
+              size="sm"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              <span className="hidden sm:inline">Back to Raid</span>
+              <span className="sm:hidden">Back</span>
+            </Button>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <h1 className="text-xl md:text-2xl font-bold text-foreground truncate">
+                  {raid.title}
+                </h1>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm text-muted-foreground hidden sm:inline">-</span>
+                  <span className="text-sm md:text-base text-muted-foreground">Roster Builder</span>
+                  {hasUnsavedChanges && (
+                    <Badge variant="outline" className="border-yellow-500 text-yellow-600 bg-yellow-500/10">
+                      Unsaved Changes
+                    </Badge>
+                  )}
+                  {raid.isRosterFinalized && (
+                    <Badge variant="outline" className="border-green-500 text-green-600 bg-green-500/10">
+                      🏆 Finalized
+                    </Badge>
+                  )}
+                </div>
+              </div>
+              <p className="text-muted-foreground text-sm mt-1">
+                {getFilledSlots()}/{getTotalSlots()} slots filled
+              </p>
             </div>
-            <p className="text-slate-400">
-              {getFilledSlots()}/{getTotalSlots()} slots filled
-            </p>
           </div>
-        </div>
 
-        <div className="flex gap-2">
-          <Button
-            onClick={saveRosterDraft}
-            variant="outline"
-            className="border-blue-500 text-blue-400 hover:bg-blue-500/10"
-            disabled={getFilledSlots() === 0}
-          >
-            <Check className="w-4 h-4 mr-2" />
-            Save Draft
-          </Button>
-          <Button
-            onClick={finalizeRoster}
-            className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
-            disabled={getFilledSlots() === 0}
-          >
-            <Check className="w-4 h-4 mr-2" />
-            Finalize Roster
-          </Button>
-          <Button onClick={postToDiscord} className="bg-[#5865F2] hover:bg-[#4752C4]">
-            <MessageSquare className="w-4 h-4 mr-2" />
-            Post to Discord
-          </Button>
+          {/* Action Buttons - Mobile Stack */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:flex sm:gap-2">
+            <Button
+              onClick={saveRosterDraft}
+              variant="outline"
+              className="border-blue-500 text-blue-600 hover:bg-blue-500/10"
+              disabled={getFilledSlots() === 0}
+              size="sm"
+            >
+              <Check className="w-4 h-4 mr-2" />
+              <span className="hidden sm:inline">Save Draft</span>
+              <span className="sm:hidden">Save</span>
+            </Button>
+            <Button
+              onClick={finalizeRoster}
+              className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white"
+              disabled={getFilledSlots() === 0}
+              size="sm"
+            >
+              <Check className="w-4 h-4 mr-2" />
+              <span className="hidden sm:inline">Finalize Roster</span>
+              <span className="sm:hidden">Finalize</span>
+            </Button>
+            <Button 
+              onClick={postToDiscord} 
+              className="bg-[#5865F2] hover:bg-[#4752C4] text-white"
+              size="sm"
+            >
+              <MessageSquare className="w-4 h-4 mr-2" />
+              <span className="hidden sm:inline">Post to Discord</span>
+              <span className="sm:hidden">Discord</span>
+            </Button>
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Available Players */}
         <div className="lg:col-span-1">
-          <Card className="bg-slate-800/50 border-slate-700">
+          <Card className="wotlk-card">
             <CardHeader>
-              <CardTitle className="text-slate-100">Available Players</CardTitle>
+              <CardTitle className="text-foreground">Available Players</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -409,7 +505,7 @@ export function RosterBuilder({ raidId, onBack }: RosterBuilderProps) {
                   <div key={role}>
                     <div className="flex items-center gap-2 mb-2">
                       {getRoleIcon(role)}
-                      <h3 className="font-medium text-slate-100 capitalize">{role}</h3>
+                      <h3 className="font-medium text-foreground capitalize">{role}</h3>
                       <Badge variant="outline" className="text-xs">
                         {signups.length}
                       </Badge>
@@ -423,11 +519,14 @@ export function RosterBuilder({ raidId, onBack }: RosterBuilderProps) {
                             key={signup.character.id}
                             draggable={!isAssigned}
                             onDragStart={(e) => handleDragStart(e, signup.character.id)}
-                            className={`p-2 rounded-lg border cursor-move transition-opacity ${
+                            onTouchStart={(e) => handleTouchStart(e, signup.character.id)}
+                            onTouchMove={handleTouchMove}
+                            onTouchEnd={handleTouchEnd}
+                            className={`p-2 rounded-lg border transition-opacity ${
                               isAssigned
-                                ? "opacity-50 cursor-not-allowed border-slate-600 bg-slate-700/30"
-                                : "border-slate-600 bg-slate-700/50 hover:bg-slate-700"
-                            }`}
+                                ? "opacity-50 cursor-not-allowed border-border bg-muted/30"
+                                : "border-border bg-card/50 hover:bg-card active:bg-card/80 cursor-move touch-manipulation"
+                            } ${draggedCharacterId === signup.character.id ? 'opacity-70 scale-95' : ''}`}
                           >
                             <div className="flex items-center justify-between">
                               <span
@@ -436,9 +535,9 @@ export function RosterBuilder({ raidId, onBack }: RosterBuilderProps) {
                               >
                                 {signup.character.name}
                               </span>
-                              <span className="text-xs text-slate-400">{signup.character.gearScore}</span>
+                              <span className="text-xs text-muted-foreground">{signup.character.gearScore}</span>
                             </div>
-                            <div className="text-xs text-slate-400">
+                            <div className="text-xs text-muted-foreground">
                               {signup.character.spec} {signup.character.class}
                             </div>
                           </div>
@@ -463,9 +562,9 @@ export function RosterBuilder({ raidId, onBack }: RosterBuilderProps) {
                              raid.rangedCap
 
               return (
-                <Card key={role} className={`bg-slate-800/50 border-2 ${getRoleColor(role)}`}>
+                <Card key={role} className={`wotlk-card border-2 ${getRoleColor(role)}`}>
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-slate-100 flex items-center gap-2">
+                    <CardTitle className="text-foreground flex items-center gap-2">
                       {getRoleIcon(role)}
                       <span className="capitalize">{role}</span>
                       <Badge variant="outline" className="ml-auto">
@@ -478,12 +577,13 @@ export function RosterBuilder({ raidId, onBack }: RosterBuilderProps) {
                       {roleSlots.map((slot) => (
                         <div
                           key={slot.id}
+                          data-slot-id={slot.id}
                           onDragOver={handleDragOver}
                           onDrop={(e) => handleDrop(e, slot.id)}
-                          className={`min-h-[60px] p-3 border-2 border-dashed rounded-lg transition-colors ${
+                          className={`min-h-[60px] p-3 border-2 border-dashed rounded-lg transition-colors touch-manipulation ${
                             slot.characterId
-                              ? "border-slate-600 bg-slate-700/50"
-                              : "border-slate-600 hover:border-slate-500 hover:bg-slate-700/30"
+                              ? "border-border bg-card/50"
+                              : "border-border hover:border-muted-foreground/50 hover:bg-card/30 active:bg-card/50"
                           }`}
                         >
                           {slot.characterId ? (
@@ -545,8 +645,6 @@ export function RosterBuilder({ raidId, onBack }: RosterBuilderProps) {
           )}
         </div>
       </div>
-
-
     </div>
   )
 }

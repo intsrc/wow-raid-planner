@@ -113,7 +113,7 @@ export function RosterDisplay({ rosterSlots, raid, onExport, onPostToDiscord }: 
               className="bg-[#5865F2] hover:bg-[#4752C4] text-white"
             >
               <MessageSquare className="w-4 h-4 mr-2" />
-              Post to Discord
+              Copy to Discord
             </Button>
           )}
         </div>

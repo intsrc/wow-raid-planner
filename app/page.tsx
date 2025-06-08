@@ -15,6 +15,7 @@ import { RaidDetails } from "./components/raid-details"
 import { CharacterManager } from "./components/character-manager"
 import { RosterBuilder } from "./components/roster-builder"
 import { AdminPanel } from "./components/admin-panel"
+import { MobileNav } from "./components/mobile-nav"
 
 function SearchParamsHandler({ onParamsChange }: { onParamsChange: (view: string, raidId?: string) => void }) {
   const searchParams = useSearchParams()
@@ -168,11 +169,21 @@ function AppContent() {
       <header className="wotlk-card border-x-0 border-t-0 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3">
+              {/* Mobile Navigation */}
+              <MobileNav 
+                currentView={currentView}
+                user={user}
+                onViewChange={updateView}
+                onLogout={logout}
+              />
+              
               <div className="w-8 h-8 guild-emblem rounded-full flex items-center justify-center">
                 <Crown className="w-4 h-4 text-slate-900" />
               </div>
-              <h1 className="text-xl font-semibold text-foreground">Verkhovna Rada RaidPlanner</h1>
+              <h1 className="text-lg md:text-xl font-semibold text-foreground truncate">
+                <span className="hidden sm:inline">Verkhovna Rada </span>RaidPlanner
+              </h1>
             </div>
 
             <nav className="hidden md:flex space-x-1">
@@ -212,7 +223,7 @@ function AppContent() {
               )}
             </nav>
 
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3">
               <div className="flex items-center space-x-2">
                 <Avatar className="w-8 h-8">
                   <AvatarImage src={user.avatarUrl || undefined} />
@@ -229,7 +240,7 @@ function AppContent() {
                 variant="ghost"
                 size="sm"
                 onClick={logout}
-                className="text-muted-foreground hover:text-foreground"
+                className="hidden md:flex text-muted-foreground hover:text-foreground"
               >
                 <LogOut className="w-4 h-4" />
               </Button>
@@ -239,7 +250,7 @@ function AppContent() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 md:py-6">
         {renderContent()}
       </main>
     </div>

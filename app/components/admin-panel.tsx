@@ -318,51 +318,51 @@ export function AdminPanel() {
 
       {/* Quick Stats */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
           <Card className="bg-slate-800/50 border-slate-700">
-            <CardContent className="p-6">
+            <CardContent className="p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-slate-400 text-sm">Total Raids</p>
-                  <p className="text-2xl font-bold text-slate-100">{stats.totalRaids}</p>
+                  <p className="text-slate-400 text-xs md:text-sm">Total Raids</p>
+                  <p className="text-xl md:text-2xl font-bold text-slate-100">{stats.totalRaids}</p>
                 </div>
-                <Calendar className="w-8 h-8 text-blue-400" />
+                <Calendar className="w-6 h-6 md:w-8 md:h-8 text-blue-400" />
               </div>
             </CardContent>
           </Card>
 
           <Card className="bg-slate-800/50 border-slate-700">
-            <CardContent className="p-6">
+            <CardContent className="p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-slate-400 text-sm">Guild Members</p>
-                  <p className="text-2xl font-bold text-slate-100">{stats.totalUsers}</p>
+                  <p className="text-slate-400 text-xs md:text-sm">Guild Members</p>
+                  <p className="text-xl md:text-2xl font-bold text-slate-100">{stats.totalUsers}</p>
                 </div>
-                <Users className="w-8 h-8 text-green-400" />
+                <Users className="w-6 h-6 md:w-8 md:h-8 text-green-400" />
               </div>
             </CardContent>
           </Card>
 
           <Card className="bg-slate-800/50 border-slate-700">
-            <CardContent className="p-6">
+            <CardContent className="p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-slate-400 text-sm">Characters</p>
-                  <p className="text-2xl font-bold text-slate-100">{stats.totalCharacters}</p>
+                  <p className="text-slate-400 text-xs md:text-sm">Characters</p>
+                  <p className="text-xl md:text-2xl font-bold text-slate-100">{stats.totalCharacters}</p>
                 </div>
-                <Shield className="w-8 h-8 text-purple-400" />
+                <Shield className="w-6 h-6 md:w-8 md:h-8 text-purple-400" />
               </div>
             </CardContent>
           </Card>
 
           <Card className="bg-slate-800/50 border-slate-700">
-            <CardContent className="p-6">
+            <CardContent className="p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-slate-400 text-sm">Raid Leaders</p>
-                  <p className="text-2xl font-bold text-slate-100">{stats.raidLeaders}</p>
+                  <p className="text-slate-400 text-xs md:text-sm">Raid Leaders</p>
+                  <p className="text-xl md:text-2xl font-bold text-slate-100">{stats.raidLeaders}</p>
                 </div>
-                <Users className="w-8 h-8 text-yellow-400" />
+                <Users className="w-6 h-6 md:w-8 md:h-8 text-yellow-400" />
               </div>
             </CardContent>
           </Card>
@@ -371,21 +371,22 @@ export function AdminPanel() {
 
       <Card className="bg-slate-800/50 border-slate-700">
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <CardTitle className="text-slate-100">Management</CardTitle>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
                 <Input
                   placeholder="Search..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 bg-slate-700 border-slate-600 text-slate-100"
+                  className="pl-10 bg-slate-700 border-slate-600 text-slate-100 w-full sm:w-auto"
                 />
               </div>
-              <Button className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700">
+              <Button className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 w-full sm:w-auto">
                 <Plus className="w-4 h-4 mr-2" />
-                Add New
+                <span className="hidden sm:inline">Add New</span>
+                <span className="sm:hidden">Add</span>
               </Button>
             </div>
           </div>
@@ -393,21 +394,25 @@ export function AdminPanel() {
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-3 bg-slate-700">
-              <TabsTrigger value="raids" className="data-[state=active]:bg-slate-600">
-                Raids ({raidCount})
+              <TabsTrigger value="raids" className="data-[state=active]:bg-slate-600 text-xs sm:text-sm">
+                <span className="hidden sm:inline">Raids ({raidCount})</span>
+                <span className="sm:hidden">Raids</span>
               </TabsTrigger>
-              <TabsTrigger value="users" className="data-[state=active]:bg-slate-600">
-                Users ({userCount})
+              <TabsTrigger value="users" className="data-[state=active]:bg-slate-600 text-xs sm:text-sm">
+                <span className="hidden sm:inline">Users ({userCount})</span>
+                <span className="sm:hidden">Users</span>
               </TabsTrigger>
-              <TabsTrigger value="characters" className="data-[state=active]:bg-slate-600">
-                Characters ({characterCount})
+              <TabsTrigger value="characters" className="data-[state=active]:bg-slate-600 text-xs sm:text-sm">
+                <span className="hidden sm:inline">Characters ({characterCount})</span>
+                <span className="sm:hidden">Chars</span>
               </TabsTrigger>
             </TabsList>
 
             <TabsContent value="raids" className="mt-6">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-slate-700">
+              <div className="responsive-table">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-slate-700">
                     <TableHead className="text-slate-300">Raid</TableHead>
                     <TableHead className="text-slate-300">Instance</TableHead>
                     <TableHead className="text-slate-300">Date</TableHead>
@@ -447,7 +452,8 @@ export function AdminPanel() {
                     </TableRow>
                   ))}
                 </TableBody>
-              </Table>
+                </Table>
+              </div>
             </TabsContent>
 
             <TabsContent value="users" className="mt-6">

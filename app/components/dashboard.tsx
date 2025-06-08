@@ -435,6 +435,7 @@ function RaidCard({ raid, signUps, isUserSignedUp, user, onRaidSelect, onSignUp,
   userCharacters: Character[]
 }) {
   const [isExpanded, setIsExpanded] = useState(false)
+  
   // Provide fallback for signUps if undefined
   const safeSignUps = signUps || { tank: [], heal: [], melee: [], ranged: [] }
   const totalSignedUp = Object.values(safeSignUps).flat().length
@@ -470,7 +471,7 @@ function RaidCard({ raid, signUps, isUserSignedUp, user, onRaidSelect, onSignUp,
     return 'normal'
   }
 
-  const dateUrgency = getDateUrgency()
+    const dateUrgency = getDateUrgency()
   const relativeDate = getRelativeDate()
 
   return (
@@ -532,7 +533,7 @@ function RaidCard({ raid, signUps, isUserSignedUp, user, onRaidSelect, onSignUp,
           </div>
         </div>
       </CardHeader>
-      {/* Compact Slot Counters - Only When Collapsed */}
+                {/* Compact Slot Counters - Only When Collapsed */}
       {!isExpanded && (
         <div className="px-6 pb-4">
           <div className="grid grid-cols-4 gap-3 mt-4">
@@ -949,6 +950,7 @@ export function Dashboard({ onRaidSelect }: DashboardProps) {
   const [raids, setRaids] = useState<Raid[]>([])
   const [userCharacters, setUserCharacters] = useState<Character[]>([])
   const [userSignUps, setUserSignUps] = useState<SignUp[]>([])
+  const [allRaidSignUps, setAllRaidSignUps] = useState<SignUp[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
@@ -990,6 +992,20 @@ export function Dashboard({ onRaidSelect }: DashboardProps) {
       setRaids(raidsData)
       setUserCharacters(charactersData)
       setUserSignUps(signUpsData)
+      
+      // Fetch all raid signups for all upcoming raids
+      const upcomingRaidIds = raidsData
+        .filter((raid) => new Date(raid.date) >= new Date())
+        .map(raid => raid.id)
+      
+      if (upcomingRaidIds.length > 0) {
+        const allSignupsPromises = upcomingRaidIds.map(raidId => 
+          apiClient.getSignUpsByRaid(raidId)
+        )
+        const allSignupsArrays = await Promise.all(allSignupsPromises)
+        const flatAllSignups = allSignupsArrays.flat()
+        setAllRaidSignUps(flatAllSignups)
+      }
     } catch (err) {
       console.error('Error fetching dashboard data:', err)
       setError(err instanceof Error ? err.message : 'Failed to load data')
@@ -1015,9 +1031,18 @@ export function Dashboard({ onRaidSelect }: DashboardProps) {
     try {
       await apiClient.createSignUp({ raidId, characterId, note })
       
-      // Refresh sign-ups data
-      const updatedSignUps = await apiClient.getSignUps()
+      // Refresh both user signups and all raid signups
+      const [updatedSignUps, updatedRaidSignUps] = await Promise.all([
+        apiClient.getSignUps(),
+        apiClient.getSignUpsByRaid(raidId)
+      ])
       setUserSignUps(updatedSignUps)
+      
+      // Update the specific raid's signups in allRaidSignUps
+      setAllRaidSignUps(prev => [
+        ...prev.filter(s => s.raidId !== raidId),
+        ...updatedRaidSignUps
+      ])
       
       // Show success message
       showMessage('Success', 'Successfully signed up for the raid!', 'success')
@@ -1034,9 +1059,20 @@ export function Dashboard({ onRaidSelect }: DashboardProps) {
       const userSignUp = userSignUps.find(s => s.raidId === raidId)
       if (userSignUp) {
         await apiClient.deleteSignUp(userSignUp.id)
-        // Refresh sign-ups data
-        const updatedSignUps = await apiClient.getSignUps()
+        
+        // Refresh both user signups and all raid signups
+        const [updatedSignUps, updatedRaidSignUps] = await Promise.all([
+          apiClient.getSignUps(),
+          apiClient.getSignUpsByRaid(raidId)
+        ])
         setUserSignUps(updatedSignUps)
+        
+        // Update the specific raid's signups in allRaidSignUps
+        setAllRaidSignUps(prev => [
+          ...prev.filter(s => s.raidId !== raidId),
+          ...updatedRaidSignUps
+        ])
+        
         showMessage('Success', 'Successfully withdrew from raid!', 'success')
       }
     } catch (err) {
@@ -1045,23 +1081,24 @@ export function Dashboard({ onRaidSelect }: DashboardProps) {
     }
   }
 
-  // Get sign-ups for raid grouped by role
+  // Get ALL sign-ups for raid grouped by role (preloaded data)
   const getSignUpsByRole = (raidId: string) => {
-    const raidSignUps = userSignUps.filter(s => s.raidId === raidId)
+    const raidSignUps = allRaidSignUps.filter(s => s.raidId === raidId)
     const signUpsWithCharacters = raidSignUps.map(signup => {
-      const character = userCharacters.find(c => c.id === signup.characterId)
+      // Character data comes from the signup.character property (populated by API)
+      const character = signup.character
       return { 
         signup, 
         character, 
-        role: character ? getRoleFromSpec(character.class, character.spec) : WowRole.MELEE 
+        role: character ? getRoleFromSpec(character.class, character.spec) : 'melee' 
       }
     }).filter(item => item.character)
 
     return {
-      tank: signUpsWithCharacters.filter(item => item.role === WowRole.TANK),
-      heal: signUpsWithCharacters.filter(item => item.role === WowRole.HEAL),
-      melee: signUpsWithCharacters.filter(item => item.role === WowRole.MELEE),
-      ranged: signUpsWithCharacters.filter(item => item.role === WowRole.RANGED),
+      tank: signUpsWithCharacters.filter(item => item.role === 'tank'),
+      heal: signUpsWithCharacters.filter(item => item.role === 'heal'),
+      melee: signUpsWithCharacters.filter(item => item.role === 'melee'),
+      ranged: signUpsWithCharacters.filter(item => item.role === 'ranged'),
     }
   }
 

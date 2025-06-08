@@ -69,8 +69,12 @@ class ApiClient {
       return process.env.NEXT_PUBLIC_API_URL
     }
 
-    // For consistency, always use the remote server
-    // This ensures cookies work properly between frontend and backend
+    // If running on Vercel (production), use relative URL that gets proxied
+    if (process.env.VERCEL || (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app'))) {
+      return '/api/v1'
+    }
+
+    // For local development, use the remote server directly
     return 'http://138.2.151.108:3001/api/v1'
   }
 
